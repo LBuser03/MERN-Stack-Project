@@ -1,0 +1,50 @@
+name: Deploy MERN Application
+  on:
+    push:
+      branches: [ main ]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    # Checkout the repository code
+    - name: Checkout code
+      uses: actions/checkout@v3
+    # Setup Node.js
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '22'
+        cache: 'npm'
+        cache-dependency-path: |
+          frontend/package-lock.json
+    # --- FRONTEND BUILD & DEPLOY ---
+    - name: Install and Build Frontend
+      run: |
+        cd frontend
+        npm install
+        npm run build
+
+    - name: Deploy Frontend to Nginx
+      uses: appleboy/scp-action@master
+      with:
+        host: ${{ secrets.DROPLET_IP }}
+        username: ${{ secrets.DROPLET_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        # Adjust 'dist' to 'build' if using Create React App
+        source: "frontend/dist/*"
+        target: "/var/www/html"
+        strip_components: 2 # Removes 'frontend/dist' from the path on the droplet
+
+    # --- BACKEND DEPLOY ---
+    - name: Deploy Backend via SSH
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.DROPLET_IP }}
+        username: ${{ secrets.DROPLET_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          cd /var/outfittrServer
+          git pull origin main
+          cd backend # Navigate to the backend sub-folder
+          npm install --production
+          pm2 restart all # Or your specific app name
